@@ -81,7 +81,7 @@ jobs:
       - name: Upload all archive artifacts
         uses: actions/upload-artifact@v6
         with:
-          name: topo-cli-v${{ steps.version.outputs.version }}-archives
+          name: topo-v${{ steps.version.outputs.version }}-archives
           path: |
             dist/*.tar.gz
             dist/*.zip
@@ -90,8 +90,18 @@ jobs:
       - name: Upload unsigned macOS artifact
         uses: actions/upload-artifact@v6
         with:
-          name: topo-cli-v${{ steps.version.outputs.version }}-macos-unsigned
+          name: topo-v${{ steps.version.outputs.version }}-macos-unsigned
           path: dist/topo_darwin_arm64_*/topo
+          if-no-files-found: error
+
+      - name: Upload unsigned Windows artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: topo-v${{ steps.version.outputs.version }}-windows-unsigned
+          path: |
+            dist/topo_windows_amd64_*/topo.exe
+            dist/topo_windows_arm64_*/topo.exe
+          if-no-files-found: error
 
       - name: Create GitHub App token for signer
         id: app-token
@@ -101,33 +111,14 @@ jobs:
           private-key: ${{ secrets.ML_REPO_ACCESS_PRIVATE_KEY }}
           owner: Arm-debug
           repositories: signer
-
-      - name: Trigger signer workflow
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          OWNER: Arm-debug
-          REPO: signer
-          WORKFLOW_FILE: sign-and-post-macos.yml
-          REF: main
-          UPSTREAM_RUN_ID: ${{ github.run_id }}
-        run: |
-          gh workflow run "$WORKFLOW_FILE" \
-            --repo "$OWNER/$REPO" \
-            --ref "$REF" \
-            -f "run-id=$UPSTREAM_RUN_ID" \
-            -f "artifact=topo-cli-v${{ steps.version.outputs.version }}-macos-unsigned" \
-            -f "release-version=${{ steps.version.outputs.version }}" \
-            -f "repo-name=topo-cli" \
-            -f "org-name=Arm-Debug" \
-            -f "binary-name=topo" \
-
+      
       - name: Trigger upload archives to artifactory workflow
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           OWNER: Arm-debug
           REPO: signer
           WORKFLOW_FILE: upload_archives_to_artifactory.yml
-          REF: main
+          REF: link-topo
           UPSTREAM_RUN_ID: ${{ github.run_id }}
         run: |
           gh workflow run "$WORKFLOW_FILE" \
@@ -135,6 +126,45 @@ jobs:
             --ref "$REF" \
             -f "run-id=$UPSTREAM_RUN_ID" \
             -f "release-version=${{ steps.version.outputs.version }}" \
-            -f "archive-name=topo-cli-v${{ steps.version.outputs.version }}-archives" \
-            -f "repo-name=topo-cli" \
-            -f "org-name=Arm-Debug" \
+            -f "archive-name=topo-v${{ steps.version.outputs.version }}-archives" \
+            -f "repo-name=topo" \
+            -f "org-name=arm" \
+
+      - name: Trigger macOS signer workflow
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          OWNER: Arm-debug
+          REPO: signer
+          WORKFLOW_FILE: sign-and-post-macos.yml
+          REF: link-topo
+          UPSTREAM_RUN_ID: ${{ github.run_id }}
+        run: |
+          gh workflow run "$WORKFLOW_FILE" \
+            --repo "$OWNER/$REPO" \
+            --ref "$REF" \
+            -f "run-id=$UPSTREAM_RUN_ID" \
+            -f "artifact=topo-v${{ steps.version.outputs.version }}-macos-unsigned" \
+            -f "release-version=${{ steps.version.outputs.version }}" \
+            -f "repo-name=topo" \
+            -f "org-name=arm" \
+            -f "binary-name=topo" \
+
+      - name: Trigger Windows signer workflow
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          OWNER: Arm-debug
+          REPO: signer
+          WORKFLOW_FILE: sign-and-post-windows.yml
+          REF: link-topo
+          UPSTREAM_RUN_ID: ${{ github.run_id }}
+        run: |
+          gh workflow run "$WORKFLOW_FILE" \
+            --repo "$OWNER/$REPO" \
+            --ref "$REF" \
+            -f "run-id=$UPSTREAM_RUN_ID" \
+            -f "artifact=topo-v${{ steps.version.outputs.version }}-windows-unsigned" \
+            -f "release-version=${{ steps.version.outputs.version }}" \
+            -f "repo-name=topo" \
+            -f "org-name=arm" \
+            -f "binary-name=topo.exe" \
+            -f "signing-artifactory-repo=edge-ai-tooling.topo-cli-signing" \
