@@ -92,16 +92,7 @@ func GenerateReport(hostDependencies []DependencyStatus, targetStatus Status) Re
 
 func Check(sshTarget string, acceptNewHostKeys bool) (Report, error) {
 	dependencyStatuses := CheckInstalled(HostRequiredDependencies, BinaryExistsLocally)
-
-	authProbeEnabled := false
-	for _, s := range dependencyStatuses {
-		if s.Dependency.Name == "ssh" {
-			authProbeEnabled = s.Installed
-			break
-		}
-	}
 	opts := target.ConnectionOptions{
-		AuthProbeEnabled:  authProbeEnabled,
 		AcceptNewHostKeys: acceptNewHostKeys,
 		AuthProbeInput:    os.Stdin,
 		AuthProbeOutput:   os.Stdout,
@@ -110,11 +101,11 @@ func Check(sshTarget string, acceptNewHostKeys bool) (Report, error) {
 	conn := target.NewConnection(sshTarget, opts)
 	targetStatus := ProbeHealthStatus(conn)
 	report := GenerateReport(dependencyStatuses, targetStatus)
-	if err := targetStatus.AuthError; err != nil {
+	if err := targetStatus.ConnectionError; err != nil {
 		if errors.Is(err, target.ErrPasswordAuthentication) {
 			return report, fmt.Errorf(passwordAuthErrorMessage, sshTarget)
 		}
-		return report, err
+		return report, nil
 	}
 	return report, nil
 }
