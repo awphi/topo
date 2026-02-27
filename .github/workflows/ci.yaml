@@ -10,6 +10,7 @@ on:
 jobs:
   lint:
     runs-on: [ ubuntu-latest ]
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -21,6 +22,11 @@ jobs:
           cache: true
           cache-dependency-path: |
             **/go.sum
+
+      - name: Run govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+          govulncheck ./...
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20 # v9.2.0
