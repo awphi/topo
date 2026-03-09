@@ -1,6 +1,7 @@
 package health
 
 import (
+	"fmt"
 	"os/exec"
 
 	"github.com/arm/topo/internal/ssh"
@@ -42,10 +43,10 @@ var TargetRequiredDependencies = []Dependency{
 
 type DependencyStatus struct {
 	Dependency Dependency
-	Installed  bool
+	Error      error
 }
 
-func CheckDependencies(binaryExists func(string) (bool, error), capabilities map[HardwareCapability]struct{}) []DependencyStatus {
+func CheckDependencies(binaryExists func(string) error, capabilities map[HardwareCapability]struct{}) []DependencyStatus {
 	deps := FilterByHardware(TargetRequiredDependencies, capabilities)
 	return CheckInstalled(deps, binaryExists)
 }
@@ -69,9 +70,9 @@ func hardwareCapabilityMatches(required []HardwareCapability, available map[Hard
 	return false
 }
 
-type LookPath = func(bin string) (bool, error)
+type BinaryExistsFn = func(bin string) error
 
-func CheckInstalled(dependencies []Dependency, binaryExists LookPath) []DependencyStatus {
+func CheckInstalled(dependencies []Dependency, binaryExists BinaryExistsFn) []DependencyStatus {
 	installed := make(map[SoftwareDependency]struct{})
 	result := make([]DependencyStatus, 0, len(dependencies))
 
@@ -80,15 +81,15 @@ func CheckInstalled(dependencies []Dependency, binaryExists LookPath) []Dependen
 			continue
 		}
 
-		isInstalled, _ := binaryExists(dep.Name)
+		err := binaryExists(dep.Name)
 
-		if isInstalled && dep.SoftwareEnumID != UnsetSoftwareDependency {
+		if err == nil && dep.SoftwareEnumID != UnsetSoftwareDependency {
 			installed[dep.SoftwareEnumID] = struct{}{}
 		}
 
 		result = append(result, DependencyStatus{
 			Dependency: dep,
-			Installed:  isInstalled,
+			Error:      err,
 		})
 	}
 	return result
@@ -103,24 +104,20 @@ func hasAnyInstalledPrerequisite(required []SoftwareDependency, installed map[So
 	return false
 }
 
-func BinaryExistsLocally(bin string) (bool, error) {
+func BinaryExistsLocally(bin string) error {
 	if err := ssh.ValidateBinaryName(bin); err != nil {
-		return false, err
+		return err
 	}
-	_, err := exec.LookPath(bin)
-	return err == nil, nil
+	if _, err := exec.LookPath(bin); err != nil {
+		return fmt.Errorf("%q executable file not found in $PATH", bin)
+	}
+	return nil
 }
 
-func CollectAvailableByCategory(dependencyStatuses []DependencyStatus) map[string][]DependencyStatus {
-	groupedByCategory := map[string][]DependencyStatus{}
-
-	for _, status := range dependencyStatuses {
-		statuses := groupedByCategory[status.Dependency.Category]
-		if status.Installed {
-			statuses = append(statuses, status)
-		}
-		groupedByCategory[status.Dependency.Category] = statuses
+func groupByCategory(statuses []DependencyStatus) map[string][]DependencyStatus {
+	grouped := map[string][]DependencyStatus{}
+	for _, status := range statuses {
+		grouped[status.Dependency.Category] = append(grouped[status.Dependency.Category], status)
 	}
-
-	return groupedByCategory
+	return grouped
 }

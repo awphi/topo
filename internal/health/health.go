@@ -37,17 +37,25 @@ type Report struct {
 
 func generateDependencyReport(statuses []DependencyStatus) []HealthCheck {
 	res := []HealthCheck{}
-	availableDepsByCategory := CollectAvailableByCategory(statuses)
-
-	for category, installedDependencies := range availableDepsByCategory {
-		names := make([]string, len(installedDependencies))
-		for i, dep := range installedDependencies {
-			names[i] = dep.Dependency.Name
+	for category, deps := range groupByCategory(statuses) {
+		var installedNames, errorMessages []string
+		for _, dep := range deps {
+			if dep.Error == nil {
+				installedNames = append(installedNames, dep.Dependency.Name)
+			} else {
+				errorMessages = append(errorMessages, dep.Error.Error())
+			}
+		}
+		var value string
+		if len(installedNames) > 0 {
+			value = strings.Join(installedNames, ", ")
+		} else {
+			value = strings.Join(errorMessages, ", ")
 		}
 		res = append(res, HealthCheck{
 			Name:    category,
-			Healthy: len(installedDependencies) > 0,
-			Value:   strings.Join(names, ", "),
+			Healthy: len(installedNames) > 0,
+			Value:   value,
 		})
 	}
 	return res
@@ -68,15 +76,21 @@ func generateTargetReport(targetStatus Status) TargetReport {
 		Healthy: targetStatus.ConnectionError == nil,
 		Value:   "",
 	}
-	report.SubsystemDriver = HealthCheck{
-		Name:    "Subsystem Driver (remoteproc)",
-		Healthy: len(targetStatus.Hardware.RemoteCPU) > 0,
+
+	report.SubsystemDriver.Name = "Subsystem Driver (remoteproc)"
+	remoteCPUs := targetStatus.Hardware.RemoteCPU
+	if len(remoteCPUs) > 0 {
+		names := make([]string, len(remoteCPUs))
+		for i, remoteProc := range remoteCPUs {
+			names[i] = remoteProc.Name
+		}
+		report.SubsystemDriver.Healthy = true
+		report.SubsystemDriver.Value = strings.Join(names, ", ")
+	} else {
+		report.SubsystemDriver.Healthy = false
+		report.SubsystemDriver.Value = "no remoteproc devices found"
 	}
-	var remoteProcNames []string
-	for _, remoteProc := range targetStatus.Hardware.RemoteCPU {
-		remoteProcNames = append(remoteProcNames, remoteProc.Name)
-	}
-	report.SubsystemDriver.Value = strings.Join(remoteProcNames, ", ")
+
 	report.Dependencies = generateDependencyReport(targetStatus.Dependencies)
 
 	return report
