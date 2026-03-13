@@ -1,6 +1,7 @@
 package health_test
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 
@@ -62,33 +63,54 @@ func TestDependencyFormat(t *testing.T) {
 	})
 }
 
-func TestCheckInstalled(t *testing.T) {
-	mockDependencies := []health.Dependency{
-		{Binary: "foo", Label: "bar"},
-		{Binary: "baz", Label: "qux"},
-	}
-
+func TestPerformChecks(t *testing.T) {
 	t.Run("when no dependencies are found, statuses show not installed", func(t *testing.T) {
+		deps := []health.Dependency{
+			{Binary: "foo", Label: "bar", Checks: []health.Check{health.BinaryExists()}},
+			{Binary: "baz", Label: "qux", Checks: []health.Check{health.BinaryExists()}},
+		}
 		mockBinaryExists := func(bin string) error {
 			return fmt.Errorf("%q executable file not found in $PATH", bin)
 		}
 
-		got := health.CheckInstalled(mockDependencies, mockBinaryExists)
+		got := health.PerformChecks(deps, mockBinaryExists)
 
 		want := []health.DependencyStatus{
 			{
-				Dependency: health.Dependency{Binary: "foo", Label: "bar"},
+				Dependency: health.Dependency{Binary: "foo", Label: "bar", Checks: []health.Check{health.BinaryExists()}},
 				Error:      mockBinaryExists("foo"),
 			},
 			{
-				Dependency: health.Dependency{Binary: "baz", Label: "qux"},
+				Dependency: health.Dependency{Binary: "baz", Label: "qux", Checks: []health.Check{health.BinaryExists()}},
 				Error:      mockBinaryExists("baz"),
 			},
 		}
 		assert.Equal(t, want, got)
 	})
 
+	t.Run("wraps error as WarningError when binary exists check severity is warning", func(t *testing.T) {
+		missingBin := health.Dependency{Binary: "missing-bin", Label: "Missing", Checks: []health.Check{health.BinaryExistsWarning()}}
+		deps := []health.Dependency{missingBin}
+		mockBinaryExists := func(bin string) error {
+			return fmt.Errorf("%q executable file not found in $PATH", bin)
+		}
+
+		got := health.PerformChecks(deps, mockBinaryExists)
+
+		assert.Len(t, got, 1)
+		want := []health.DependencyStatus{
+			{
+				Dependency: missingBin,
+				Error:      health.WarningError{Err: mockBinaryExists("missing-bin")},
+			},
+		}
+		assert.Equal(t, want, got)
+	})
+
 	t.Run("when a dependency is found, its status entry reflects that", func(t *testing.T) {
+		deps := []health.Dependency{
+			{Binary: "baz", Label: "qux", Checks: []health.Check{health.BinaryExists()}},
+		}
 		mockBinaryExists := func(bin string) error {
 			if bin == "baz" {
 				return nil
@@ -96,15 +118,11 @@ func TestCheckInstalled(t *testing.T) {
 			return fmt.Errorf("%q executable file not found in $PATH", bin)
 		}
 
-		got := health.CheckInstalled(mockDependencies, mockBinaryExists)
+		got := health.PerformChecks(deps, mockBinaryExists)
 
 		want := []health.DependencyStatus{
 			{
-				Dependency: health.Dependency{Binary: "foo", Label: "bar"},
-				Error:      mockBinaryExists("foo"),
-			},
-			{
-				Dependency: health.Dependency{Binary: "baz", Label: "qux"},
+				Dependency: health.Dependency{Binary: "baz", Label: "qux", Checks: []health.Check{health.BinaryExists()}},
 				Error:      nil,
 			},
 		}
@@ -113,8 +131,8 @@ func TestCheckInstalled(t *testing.T) {
 
 	t.Run("omits dependency when none of its SoftwarePrerequisites are installed", func(t *testing.T) {
 		deps := []health.Dependency{
-			{Binary: "docker", Label: "Container Engine"},
-			{Binary: "runtime", Label: "Runtime", SoftwarePrerequisites: []health.SoftwareDependency{health.Docker}},
+			{Binary: "docker", Label: "Container Engine", Checks: []health.Check{health.BinaryExists()}},
+			{Binary: "runtime", Label: "Runtime", SoftwarePrerequisites: []health.SoftwareDependency{health.Docker}, Checks: []health.Check{health.BinaryExists()}},
 		}
 		mockBinaryExists := func(bin string) error {
 			if bin == "runtime" {
@@ -123,44 +141,60 @@ func TestCheckInstalled(t *testing.T) {
 			return fmt.Errorf("%q executable file not found in $PATH", bin)
 		}
 
-		got := health.CheckInstalled(deps, mockBinaryExists)
+		got := health.PerformChecks(deps, mockBinaryExists)
 
 		want := []health.DependencyStatus{
-			{Dependency: health.Dependency{Binary: "docker", Label: "Container Engine"}, Error: mockBinaryExists("docker")},
+			{Dependency: health.Dependency{Binary: "docker", Label: "Container Engine", Checks: []health.Check{health.BinaryExists()}}, Error: mockBinaryExists("docker")},
 		}
 		assert.Equal(t, want, got)
 	})
 
 	t.Run("checks dependency when one of its SoftwarePrerequisites is installed", func(t *testing.T) {
 		deps := []health.Dependency{
-			{Binary: "docker", Label: "Container Engine", SoftwareEnumID: health.Docker},
-			{Binary: "runtime", Label: "Runtime", SoftwarePrerequisites: []health.SoftwareDependency{health.Docker}},
+			{Binary: "docker", Label: "Container Engine", SoftwareEnumID: health.Docker, Checks: []health.Check{health.BinaryExists()}},
+			{Binary: "runtime", Label: "Runtime", SoftwarePrerequisites: []health.SoftwareDependency{health.Docker}, Checks: []health.Check{health.BinaryExists()}},
 		}
 		mockBinaryExists := func(bin string) error {
 			return nil
 		}
 
-		got := health.CheckInstalled(deps, mockBinaryExists)
+		got := health.PerformChecks(deps, mockBinaryExists)
 
 		want := []health.DependencyStatus{
-			{Dependency: health.Dependency{Binary: "docker", Label: "Container Engine", SoftwareEnumID: health.Docker}, Error: nil},
-			{Dependency: health.Dependency{Binary: "runtime", Label: "Runtime", SoftwarePrerequisites: []health.SoftwareDependency{health.Docker}}, Error: nil},
+			{Dependency: health.Dependency{Binary: "docker", Label: "Container Engine", SoftwareEnumID: health.Docker, Checks: []health.Check{health.BinaryExists()}}, Error: nil},
+			{Dependency: health.Dependency{Binary: "runtime", Label: "Runtime", SoftwarePrerequisites: []health.SoftwareDependency{health.Docker}, Checks: []health.Check{health.BinaryExists()}}, Error: nil},
 		}
 		assert.Equal(t, want, got)
 	})
 
+	t.Run("captures Fix from failing check", func(t *testing.T) {
+		dep := health.Dependency{
+			Binary: "vader.exe",
+			Label:  "Sith",
+			Checks: []health.Check{{Kind: health.CheckBinaryExists, Severity: health.SeverityWarning, Fix: "turn Anakin into a bad man"}},
+		}
+		mockBinaryExists := func(bin string) error {
+			return errors.New("vader not found")
+		}
+
+		got := health.PerformChecks([]health.Dependency{dep}, mockBinaryExists)
+
+		assert.Len(t, got, 1)
+		assert.Equal(t, "turn Anakin into a bad man", got[0].Fix)
+	})
+
 	t.Run("checks dependency with no SoftwarePrerequisites unconditionally", func(t *testing.T) {
 		deps := []health.Dependency{
-			{Binary: "standalone", Label: "Tools"},
+			{Binary: "standalone", Label: "Tools", Checks: []health.Check{health.BinaryExists()}},
 		}
 		mockBinaryExists := func(bin string) error {
 			return nil
 		}
 
-		got := health.CheckInstalled(deps, mockBinaryExists)
+		got := health.PerformChecks(deps, mockBinaryExists)
 
 		want := []health.DependencyStatus{
-			{Dependency: health.Dependency{Binary: "standalone", Label: "Tools"}, Error: nil},
+			{Dependency: health.Dependency{Binary: "standalone", Label: "Tools", Checks: []health.Check{health.BinaryExists()}}, Error: nil},
 		}
 		assert.Equal(t, want, got)
 	})

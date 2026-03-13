@@ -7,6 +7,38 @@ import (
 	"github.com/arm/topo/internal/ssh"
 )
 
+type CheckKind int
+
+const (
+	CheckBinaryExists CheckKind = iota
+)
+
+type CheckSeverity int
+
+const (
+	SeverityError CheckSeverity = iota
+	SeverityWarning
+)
+
+type WarningError struct{ Err error }
+
+func (w WarningError) Error() string { return w.Err.Error() }
+
+type Check struct {
+	Kind     CheckKind
+	Arg      string
+	Severity CheckSeverity
+	Fix      string
+}
+
+func BinaryExists() Check {
+	return Check{Kind: CheckBinaryExists, Severity: SeverityError}
+}
+
+func BinaryExistsWarning() Check {
+	return Check{Kind: CheckBinaryExists, Severity: SeverityWarning}
+}
+
 type HardwareCapability int
 
 const (
@@ -24,31 +56,71 @@ const (
 type Dependency struct {
 	Binary                string
 	Label                 string
+	Checks                []Check
 	SoftwareEnumID        SoftwareDependency
 	SoftwarePrerequisites []SoftwareDependency
 	HardwarePrerequisite  []HardwareCapability
 }
 
 var HostRequiredDependencies = []Dependency{
-	{Binary: "ssh", Label: "SSH"},
-	{Binary: "docker", Label: "Container Engine", SoftwareEnumID: Docker},
+	{
+		Binary: "ssh",
+		Label:  "SSH",
+		Checks: []Check{BinaryExists()},
+	},
+	{
+		Binary:         "docker",
+		Label:          "Container Engine",
+		SoftwareEnumID: Docker,
+		Checks:         []Check{BinaryExists()},
+	},
 }
 
 var TargetRequiredDependencies = []Dependency{
-	{Binary: "docker", Label: "Container Engine", SoftwareEnumID: Docker},
-	{Binary: "remoteproc-runtime", Label: "Remoteproc Runtime", SoftwarePrerequisites: []SoftwareDependency{Docker}, HardwarePrerequisite: []HardwareCapability{Remoteproc}},
-	{Binary: "containerd-shim-remoteproc-v1", Label: "Remoteproc Shim", SoftwarePrerequisites: []SoftwareDependency{Docker}, HardwarePrerequisite: []HardwareCapability{Remoteproc}},
-	{Binary: "lscpu", Label: "Hardware Info", SoftwareEnumID: Lscpu},
+	{
+		Binary:         "docker",
+		Label:          "Container Engine",
+		SoftwareEnumID: Docker,
+		Checks:         []Check{BinaryExists()},
+	},
+	{
+		Binary:                "remoteproc-runtime",
+		Label:                 "Remoteproc Runtime",
+		SoftwarePrerequisites: []SoftwareDependency{Docker},
+		HardwarePrerequisite:  []HardwareCapability{Remoteproc},
+		Checks: []Check{
+			{
+				Kind:     CheckBinaryExists,
+				Severity: SeverityWarning,
+				Fix:      "run `topo install remoteproc-runtime`",
+			},
+		},
+	},
+	{
+		Binary:                "containerd-shim-remoteproc-v1",
+		Label:                 "Remoteproc Shim",
+		SoftwarePrerequisites: []SoftwareDependency{Docker},
+		HardwarePrerequisite:  []HardwareCapability{Remoteproc},
+		Checks: []Check{
+			{
+				Kind:     CheckBinaryExists,
+				Severity: SeverityWarning,
+				Fix:      "run `topo install remoteproc-runtime`",
+			},
+		},
+	},
+	{
+		Binary:         "lscpu",
+		Label:          "Hardware Info",
+		SoftwareEnumID: Lscpu,
+		Checks:         []Check{BinaryExists()},
+	},
 }
 
 type DependencyStatus struct {
 	Dependency Dependency
 	Error      error
-}
-
-func CheckDependencies(binaryExists func(string) error, capabilities map[HardwareCapability]struct{}) []DependencyStatus {
-	deps := FilterByHardware(TargetRequiredDependencies, capabilities)
-	return CheckInstalled(deps, binaryExists)
+	Fix        string
 }
 
 func FilterByHardware(deps []Dependency, hardware map[HardwareCapability]struct{}) []Dependency {
@@ -72,7 +144,7 @@ func hardwareCapabilityMatches(required []HardwareCapability, available map[Hard
 
 type BinaryExistsFn = func(bin string) error
 
-func CheckInstalled(dependencies []Dependency, binaryExists BinaryExistsFn) []DependencyStatus {
+func PerformChecks(dependencies []Dependency, binaryExists BinaryExistsFn) []DependencyStatus {
 	installed := make(map[SoftwareDependency]struct{})
 	result := make([]DependencyStatus, 0, len(dependencies))
 
@@ -81,15 +153,29 @@ func CheckInstalled(dependencies []Dependency, binaryExists BinaryExistsFn) []De
 			continue
 		}
 
-		err := binaryExists(dep.Binary)
-
-		if err == nil && dep.SoftwareEnumID != UnsetSoftwareDependency {
-			installed[dep.SoftwareEnumID] = struct{}{}
+		var err error
+		var fix string
+		for _, check := range dep.Checks {
+			switch check.Kind {
+			case CheckBinaryExists:
+				err = binaryExists(dep.Binary)
+				if err == nil && dep.SoftwareEnumID != UnsetSoftwareDependency {
+					installed[dep.SoftwareEnumID] = struct{}{}
+				}
+			}
+			if err != nil {
+				if check.Severity == SeverityWarning {
+					err = WarningError{Err: err}
+				}
+				fix = check.Fix
+				break
+			}
 		}
 
 		result = append(result, DependencyStatus{
 			Dependency: dep,
 			Error:      err,
+			Fix:        fix,
 		})
 	}
 	return result

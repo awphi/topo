@@ -34,6 +34,7 @@ type HealthCheck struct {
 	Name   string      `json:"name"`
 	Status CheckStatus `json:"status"`
 	Value  string      `json:"value"`
+	Fix    string      `json:"fix,omitempty"`
 }
 
 type HostReport struct {
@@ -64,7 +65,7 @@ func (r TargetReport) MarshalJSON() ([]byte, error) {
 }
 
 func CheckHost() HostReport {
-	dependencyStatuses := CheckInstalled(HostRequiredDependencies, BinaryExistsLocally)
+	dependencyStatuses := PerformChecks(HostRequiredDependencies, BinaryExistsLocally)
 	return GenerateHostReport(dependencyStatuses)
 }
 
@@ -127,8 +128,13 @@ func generateDependencyReport(statuses []DependencyStatus) []HealthCheck {
 			hc.Status = CheckStatusOK
 			hc.Value = ds.Dependency.Binary
 		} else {
-			hc.Status = CheckStatusError
+			if _, ok := errors.AsType[WarningError](ds.Error); ok {
+				hc.Status = CheckStatusWarning
+			} else {
+				hc.Status = CheckStatusError
+			}
 			hc.Value = ds.Error.Error()
+			hc.Fix = ds.Fix
 		}
 		res = append(res, hc)
 	}
