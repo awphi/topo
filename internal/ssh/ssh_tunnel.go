@@ -123,7 +123,7 @@ func NewCheckSSHTunnelSecurity(targetHost Host, port string) *CheckSSHTunnelSecu
 
 func (ct *CheckSSHTunnelSecurity) Command() *exec.Cmd {
 	if !ct.TargetHost.IsLocalhost() {
-		_, host, _ := resolveSSHConfigHost(string(ct.TargetHost))
+		host := resolveHost(string(ct.TargetHost))
 		if host == "" {
 			return nil
 		}
@@ -248,4 +248,27 @@ func (s *SSHTunnelProcessStop) Run(w io.Writer) error {
 func (s *SSHTunnelProcessStop) DryRun(w io.Writer) error {
 	_, _ = fmt.Fprintln(w, strings.Join(s.Command().Args, " "))
 	return nil
+}
+
+func resolveHost(raw string) string {
+	if raw == "" || isExplicitHost(raw) {
+		_, host, _ := SplitUserHostPort(raw)
+		return host
+	}
+
+	config := NewConfig(raw)
+	return config.host
+}
+
+func isExplicitHost(raw string) bool {
+	if strings.HasPrefix(raw, "ssh://") {
+		return true
+	}
+	if strings.Contains(raw, "@") || strings.Contains(raw, ":") {
+		return true
+	}
+	if strings.HasPrefix(raw, "[") {
+		return true
+	}
+	return false
 }
