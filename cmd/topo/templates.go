@@ -37,7 +37,7 @@ var templatesCmd = &cobra.Command{
 		} else {
 			resolvedTarget, exists := lookupTarget(cmd)
 			if exists {
-				conn := target.NewConnection(resolvedTarget, target.ConnectionOptions{Multiplex: true})
+				conn := target.NewConnection(resolvedTarget, target.ConnectionOptions{Multiplex: true, ConnectTimeout: sshConnectTimeout})
 				hwProfile, err := describe.GenerateTargetDescription(conn)
 				if err != nil {
 					return err

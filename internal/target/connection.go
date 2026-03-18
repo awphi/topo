@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"time"
 
 	commandpkg "github.com/arm/topo/internal/command"
 	"github.com/arm/topo/internal/ssh"
@@ -50,6 +51,7 @@ type ConnectionOptions struct {
 	WithStdin         []byte
 	Multiplex         bool
 	WithMockExec      ExecSSH
+	ConnectTimeout    time.Duration
 }
 
 var ErrPasswordAuthentication = errors.New("key-based SSH authentication is not setup")
@@ -59,6 +61,7 @@ func NewConnection(sshTarget string, opts ConnectionOptions) Connection {
 	if opts.WithMockExec != nil {
 		execFn = opts.WithMockExec
 	}
+	opts.ConnectTimeout = ssh.NewConfig(sshTarget).ConnectTimeout(opts.ConnectTimeout)
 	return Connection{
 		SSHTarget: ssh.Host(sshTarget),
 		exec:      execFn,
@@ -71,7 +74,7 @@ func (c *Connection) Run(command string) (string, error) {
 		command = ssh.ShellCommand(command)
 	}
 
-	sshArgs := []string{}
+	sshArgs := c.connectTimeoutArgs()
 	if c.opts.Multiplex && runtime.GOOS != "windows" {
 		sshArgs = append(sshArgs, "-o", "ControlMaster=auto", "-o", "ControlPersist=10s", "-o", "ControlPath=~/.ssh/topo-cm-%r@%h:%p")
 	}
@@ -136,6 +139,17 @@ var (
 	ErrAuthenticationFailure = errors.New("ssh authentication failed")
 )
 
+type ConnectionTimeoutError struct {
+	Timeout time.Duration
+}
+
+func (e ConnectionTimeoutError) Error() string {
+	if e.Timeout > 0 {
+		return fmt.Sprintf("ssh connection timed out after %s", e.Timeout)
+	}
+	return "ssh connection timed out"
+}
+
 func (c *Connection) isPasswordAuthenticated() (bool, error) {
 	var extraArgs []string
 	if c.opts.AcceptNewHostKeys {
@@ -161,10 +175,17 @@ func (c *Connection) isPasswordAuthenticated() (bool, error) {
 	}
 }
 
+func (c *Connection) connectTimeoutArgs() []string {
+	if c.opts.ConnectTimeout <= 0 {
+		return nil
+	}
+	return []string{"-o", fmt.Sprintf("ConnectTimeout=%d", int(c.opts.ConnectTimeout.Seconds()))}
+}
+
 // All SSH authentication probes run the command "true" to check if the authentication method works.
 // All sshArgs should be hardcoded SSH options, not user-provided arguments.
 func (c *Connection) runSSHAuthenticationProbe(sshArgs []string) error {
-	cmd := c.exec(c.SSHTarget, "true", nil, sshArgs...)
+	cmd := c.exec(c.SSHTarget, "true", nil, slices.Concat(c.connectTimeoutArgs(), sshArgs)...)
 	stdoutBytes, err := cmd.CombinedOutput()
 	if err == nil {
 		return nil
@@ -175,6 +196,9 @@ func (c *Connection) runSSHAuthenticationProbe(sshArgs []string) error {
 	}
 	if strings.Contains(output, "permission denied") || strings.Contains(output, "authentication failed") || strings.Contains(output, "password") {
 		return ErrAuthenticationFailure
+	}
+	if strings.Contains(output, "timed out") || strings.Contains(output, "connection timeout") || strings.Contains(output, "did not properly respond after a period of time") {
+		return ConnectionTimeoutError{Timeout: c.opts.ConnectTimeout}
 	}
 	return fmt.Errorf("ssh probe failed: %w", err)
 }
