@@ -39,9 +39,7 @@ This command performs the following operations in sequence:
   3. Transfer - Transfers built and pulled images and compose file to the target host
   4. Run - Runs docker compose up on the target host
 
-The compose file (compose.yaml) must be in the current working directory, as this is used to select the containers to be deployed.
-
-Use --dry-run to see what commands would be executed without actually running them.`,
+The compose file (compose.yaml) must be in the current working directory, as this is used to select the containers to be deployed.`,
 	Args: cobra.ExactArgs(0),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cmd.SilenceUsage = true
