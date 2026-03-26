@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io"
 	"os/exec"
 	"runtime"
 	"slices"
@@ -91,16 +90,6 @@ func (c *Connection) Run(cmdStr string) (string, error) {
 		return stdoutBuf.String() + stderr, fmt.Errorf("ssh command to %s failed: %w | stderr: %s", c.SSHTarget, err, stderr)
 	}
 	return stdoutBuf.String(), nil
-}
-
-func (c *Connection) DryRun(cmdStr string, output io.Writer) error {
-	if c.opts.WithLoginShell {
-		cmdStr = ssh.ShellCommand(cmdStr)
-	}
-
-	cmd := c.exec(c.SSHTarget, cmdStr, c.opts.WithStdin)
-	_, err := fmt.Fprintln(output, command.String(cmd))
-	return err
 }
 
 func (c *Connection) BinaryExists(bin string) error {

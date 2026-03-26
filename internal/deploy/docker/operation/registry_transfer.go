@@ -43,20 +43,6 @@ func (r *RegistryTransfer) Run(w io.Writer) error {
 	return nil
 }
 
-func (r *RegistryTransfer) DryRun(w io.Writer) error {
-	images, err := r.getImagesFromCompose(w)
-	if err != nil {
-		return err
-	}
-	for _, image := range images {
-		cmds := r.buildTransferCommands(image)
-		for _, cmd := range cmds {
-			_, _ = fmt.Fprintf(w, "%s\n", command.String(cmd))
-		}
-	}
-	return nil
-}
-
 func (r *RegistryTransfer) getImagesFromCompose(w io.Writer) ([]string, error) {
 	cmd := command.DockerCompose(r.source, r.composeFile, "config", "--images")
 	cmd.Stderr = w
