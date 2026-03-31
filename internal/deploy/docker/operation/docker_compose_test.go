@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/arm/topo/internal/deploy/docker/command"
 	"github.com/arm/topo/internal/deploy/docker/operation"
 	"github.com/arm/topo/internal/deploy/docker/testutil"
-	"github.com/arm/topo/internal/ssh"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -26,7 +26,7 @@ services:
 `
 			testutil.RequireWriteFile(t, composeFilePath, composeFileContent)
 			var buf bytes.Buffer
-			op := operation.NewDockerCompose("", composeFilePath, ssh.PlainLocalhost, []string{"config", "--services"})
+			op := operation.NewDockerCompose("", composeFilePath, command.LocalHost, []string{"config", "--services"})
 
 			err := op.Run(&buf)
 
@@ -37,9 +37,7 @@ services:
 }
 
 func TestNewDockerComposeBuild(t *testing.T) {
-	composeFilePath := "/path/to/compose.yaml"
-	remoteHost := ssh.NewDestination("user@remote")
-	op := operation.NewDockerComposeBuild(composeFilePath, remoteHost)
+	op := operation.NewDockerComposeBuild("/path/to/compose.yaml", command.LocalHost)
 
 	t.Run("Description", func(t *testing.T) {
 		got := op.Description()
@@ -49,9 +47,7 @@ func TestNewDockerComposeBuild(t *testing.T) {
 }
 
 func TestNewDockerComposePull(t *testing.T) {
-	composeFilePath := "/path/to/compose.yaml"
-	remoteHost := ssh.NewDestination("user@remote")
-	op := operation.NewDockerComposePull(composeFilePath, remoteHost)
+	op := operation.NewDockerComposePull("/path/to/compose.yaml", command.LocalHost)
 
 	t.Run("Description", func(t *testing.T) {
 		got := op.Description()
@@ -61,9 +57,7 @@ func TestNewDockerComposePull(t *testing.T) {
 }
 
 func TestNewDockerComposeRun(t *testing.T) {
-	composeFilePath := "/path/to/compose.yaml"
-	remoteHost := ssh.NewDestination("user@remote")
-	opDefault := operation.NewDockerComposeUp(composeFilePath, remoteHost, operation.RecreateModeDefault)
+	opDefault := operation.NewDockerComposeUp("/path/to/compose.yaml", command.LocalHost, operation.RecreateModeDefault)
 
 	t.Run("Description", func(t *testing.T) {
 		got := opDefault.Description()
@@ -71,7 +65,7 @@ func TestNewDockerComposeRun(t *testing.T) {
 		assert.Equal(t, "Start services", got)
 	})
 
-	opForce := operation.NewDockerComposeUp(composeFilePath, remoteHost, operation.RecreateModeForce)
+	opForce := operation.NewDockerComposeUp("/path/to/compose.yaml", command.LocalHost, operation.RecreateModeForce)
 
 	t.Run("Description with --force-recreate", func(t *testing.T) {
 		got := opForce.Description()

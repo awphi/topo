@@ -7,18 +7,17 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/arm/topo/internal/command"
-	"github.com/arm/topo/internal/ssh"
+	"github.com/arm/topo/internal/deploy/docker/command"
 	"golang.org/x/sync/errgroup"
 )
 
 type DockerComposePipeTransfer struct {
 	composeFile string
-	source      ssh.Destination
-	dest        ssh.Destination
+	source      command.Host
+	dest        command.Host
 }
 
-func NewDockerComposePipeTransfer(composeFile string, source, dest ssh.Destination) *DockerComposePipeTransfer {
+func NewDockerComposePipeTransfer(composeFile string, source, dest command.Host) *DockerComposePipeTransfer {
 	return &DockerComposePipeTransfer{
 		composeFile: composeFile,
 		source:      source,

@@ -6,10 +6,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/arm/topo/internal/command"
+	"github.com/arm/topo/internal/deploy/docker/command"
 	"github.com/arm/topo/internal/deploy/docker/operation"
 	"github.com/arm/topo/internal/deploy/docker/testutil"
-	"github.com/arm/topo/internal/ssh"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -56,7 +55,8 @@ latest: size: 1234`
 func TestRegistryTransfer(t *testing.T) {
 	t.Run("Description", func(t *testing.T) {
 		t.Run("it returns expected string", func(t *testing.T) {
-			transfer := operation.NewRegistryTransfer("any.yaml", ssh.PlainLocalhost, ssh.PlainLocalhost, operation.DefaultRegistryPort)
+			localHost := command.LocalHost
+			transfer := operation.NewRegistryTransfer("any.yaml", localHost, localHost, operation.DefaultRegistryPort)
 
 			got := transfer.Description()
 
@@ -67,7 +67,7 @@ func TestRegistryTransfer(t *testing.T) {
 	t.Run("Run", func(t *testing.T) {
 		t.Run("it transfers images via registry", func(t *testing.T) {
 			testutil.RequireLinuxDockerEngine(t)
-			h := ssh.PlainLocalhost
+			h := command.LocalHost
 			port := operation.DefaultRegistryPort
 			tmpDir := t.TempDir()
 			composeFilePath := filepath.Join(tmpDir, "compose.yaml")
