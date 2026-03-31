@@ -73,6 +73,20 @@ totalmemory_kb: 4194304
 		err = json.Unmarshal(out, &entry)
 		assert.NoError(t, err)
 	})
+
+	t.Run("outputs errors as JSON when specified", func(t *testing.T) {
+		cmd := exec.Command(bin, "templates", "--output", "json", "--target", "invalid-target")
+		out, err := cmd.CombinedOutput()
+		require.Error(t, err)
+
+		var entry map[string]interface{}
+		err = json.Unmarshal(out, &entry)
+		assert.NoError(t, err)
+		assert.Equal(t, "ERROR", entry["level"])
+		_, ok := entry["msg"].(string)
+		assert.True(t, ok, "msg field should be a string")
+		assert.NotNil(t, entry["time"])
+	})
 }
 
 func writeTargetDescription(t *testing.T, content string) string {
