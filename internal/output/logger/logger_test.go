@@ -11,11 +11,11 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func setup(t *testing.T) *bytes.Buffer {
+func setupTestLogOutputBuffer(t *testing.T, format term.Format) *bytes.Buffer {
 	t.Helper()
 	var buf bytes.Buffer
 	logger.SetOutput(&buf)
-	logger.SetOutputFormat(term.JSON)
+	logger.SetOutputFormat(format)
 	t.Cleanup(func() {
 		logger.SetOutput(os.Stderr)
 		logger.SetOutputFormat(term.Plain)
@@ -24,7 +24,7 @@ func setup(t *testing.T) *bytes.Buffer {
 }
 
 func TestLogFunctions(t *testing.T) {
-	buf := setup(t)
+	buf := setupTestLogOutputBuffer(t, term.JSON)
 
 	tests := []struct {
 		name  string
@@ -54,7 +54,7 @@ func TestLogFunctions(t *testing.T) {
 
 func TestSetOutputFormat(t *testing.T) {
 	t.Run("JSON", func(t *testing.T) {
-		buf := setup(t)
+		buf := setupTestLogOutputBuffer(t, term.JSON)
 
 		logger.Info("json test")
 
@@ -66,8 +66,7 @@ func TestSetOutputFormat(t *testing.T) {
 	})
 
 	t.Run("Plain", func(t *testing.T) {
-		buf := setup(t)
-		logger.SetOutputFormat(term.Plain)
+		buf := setupTestLogOutputBuffer(t, term.Plain)
 
 		logger.Info("plain test")
 
