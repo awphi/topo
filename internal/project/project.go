@@ -128,10 +128,7 @@ func Extend(targetComposeFile string, src template.Source, argProvider arguments
 	}
 	for argName := range resolvedArgs {
 		if !usedArgs[argName] {
-			logs = append(logs, logger.Entry{
-				Level:   logger.Warning,
-				Message: fmt.Sprintf("arg %q was resolved but not found in any service build args", argName),
-			})
+			logger.Warn(fmt.Sprintf("arg %q was resolved but not found in any service build args", argName))
 		}
 	}
 
