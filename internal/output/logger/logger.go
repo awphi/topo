@@ -1,33 +1,53 @@
 package logger
 
 import (
+	"io"
 	"log/slog"
 	"os"
+	"time"
 
 	"github.com/arm/topo/internal/output/term"
+	"github.com/lmittmann/tint"
 )
+
+var (
+	output = io.Writer(os.Stderr)
+	logger = newPlainLogger()
+)
+
+func newPlainLogger() *slog.Logger {
+	return slog.New(tint.NewHandler(output, &tint.Options{
+		TimeFormat: time.TimeOnly,
+		NoColor:    !term.IsTTY(output),
+	}))
+}
+
+func SetOutput(w io.Writer) {
+	output = w
+	logger = newPlainLogger()
+}
 
 func SetOutputFormat(format term.Format) {
 	switch format {
 	case term.Plain:
-		slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, nil)))
+		logger = newPlainLogger()
 	case term.JSON:
-		slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, nil)))
+		logger = slog.New(slog.NewJSONHandler(output, nil))
 	}
 }
 
 func Debug(msg string, args ...any) {
-	slog.Debug(msg, args...)
+	logger.Debug(msg, args...)
 }
 
 func Info(msg string, args ...any) {
-	slog.Info(msg, args...)
+	logger.Info(msg, args...)
 }
 
 func Warn(msg string, args ...any) {
-	slog.Warn(msg, args...)
+	logger.Warn(msg, args...)
 }
 
 func Error(msg string, args ...any) {
-	slog.Error(msg, args...)
+	logger.Error(msg, args...)
 }
