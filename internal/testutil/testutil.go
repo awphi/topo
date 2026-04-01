@@ -107,6 +107,12 @@ func AssertFileContents(t *testing.T, wantContents string, path string) {
 func AssertGoldenFile(t *testing.T, got string, goldenPath string) {
 	t.Helper()
 
+	if os.Getenv("UPDATE_GOLDEN") == "1" {
+		err := os.WriteFile(goldenPath, []byte(got), 0o644)
+		require.NoError(t, err)
+		return
+	}
+
 	wantBytes, err := os.ReadFile(goldenPath)
 	require.NoError(t, err)
 	want := string(wantBytes)
