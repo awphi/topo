@@ -103,3 +103,13 @@ func AssertFileContents(t *testing.T, wantContents string, path string) {
 	require.NoError(t, err)
 	require.Equal(t, wantContents, string(got))
 }
+
+func AssertGoldenFile(t *testing.T, got string, goldenPath string) {
+	t.Helper()
+
+	wantBytes, err := os.ReadFile(goldenPath)
+	require.NoError(t, err)
+	want := string(wantBytes)
+
+	require.Equal(t, want, got, "output did not match golden file %s", goldenPath)
+}

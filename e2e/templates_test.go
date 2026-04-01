@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/arm/topo/internal/output/templates"
 	"github.com/arm/topo/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -68,10 +67,7 @@ totalmemory_kb: 4194304
 		out, err := cmd.CombinedOutput()
 		require.NoError(t, err)
 
-		assert.NoError(t, err)
-		var entry templates.RepoCollection
-		err = json.Unmarshal(out, &entry)
-		assert.NoError(t, err)
+		testutil.AssertGoldenFile(t, string(out), "testdata/TestTemplatesJson.golden")
 	})
 
 	t.Run("outputs errors as JSON when specified", func(t *testing.T) {

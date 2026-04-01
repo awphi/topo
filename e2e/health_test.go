@@ -1,11 +1,9 @@
 package e2e
 
 import (
-	"encoding/json"
 	"os/exec"
 	"testing"
 
-	"github.com/arm/topo/internal/health"
 	"github.com/arm/topo/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -44,9 +42,7 @@ func TestHealthCheck(t *testing.T) {
 		out, err := runCheckHealth(topo, target, "--output", "json")
 
 		assert.NoError(t, err)
-		var entry health.TargetReport
-		err = json.Unmarshal([]byte(out), &entry)
-		assert.NoError(t, err)
+		testutil.AssertGoldenFile(t, out, "testdata/TestHealthCheckJson.golden")
 	})
 }
 
